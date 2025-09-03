@@ -1,0 +1,49 @@
+const fetch = require('node-fetch');
+
+const cache = new Map();
+const TTL = 1000 * 60 * 10; // 10 minutes
+
+function cacheGet(k){
+  const v = cache.get(k);
+  if(!v) return null;
+  if(Date.now() - v.ts > TTL){ cache.delete(k); return null; }
+  return v.data;
+}
+
+function cacheSet(k,d){ cache.set(k,{ts:Date.now(),data:d}); }
+
+module.exports = async (req, res) => {
+  const q = req.query.q || 'trucking contracts Gauteng';
+  const sector = req.query.sector || 'general';
+  const key = `${sector}::${q}`;
+  const cached = cacheGet(key);
+  if(cached) return res.status(200).json({ results: cached, cached: true });
+
+  try {
+    let query = q;
+    if(sector === 'mining'){
+      query = `${q} (mining OR "side tipper" OR ore OR coal OR chrome OR aggregates OR "mine site" OR tender) site:.za`;
+    } else {
+      query = `${q} ("WeTransport" OR "Land Express" OR "Gumtree" OR "Transplo") site:.za`;
+    }
+
+    const params = new URLSearchParams({ q: query, api_key: process.env.SERPAPI_KEY, location: 'South Africa' });
+    const r = await fetch(`https://serpapi.com/search.json?${params.toString()}`);
+    const json = await r.json();
+
+    const results = (json.organic_results || []).slice(0,16).map(item => ({
+      title: item.title,
+      snippet: item.snippet || (item.rich_snippet?.top?.extensions?.join(' ') || ''),
+      url: item.link,
+      source: item.displayed_link || '',
+      date: item.date || null
+    }));
+
+    cacheSet(key, results);
+    return res.status(200).json({ results, cached: false });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'search_failed', message: String(err) });
+  }
+};
