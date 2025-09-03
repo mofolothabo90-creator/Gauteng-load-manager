@@ -1,0 +1,14 @@
+/pages
+  _app.js
+  index.js
+  /api
+    searchContracts.js
+/lib
+  supabaseClient.js
+/styles
+  globals.css
+package.json
+next.config.js
+.env.local.example
+schema.sql
+README.md
